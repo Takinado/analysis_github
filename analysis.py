@@ -1,10 +1,10 @@
 """Скрипт анализа репозитория GitHub"""
+import argparse
+import calendar
 import json
 import logging
-import calendar
-import time
-
 import requests
+import time
 import sys
 
 from urllib3.exceptions import MaxRetryError
@@ -23,19 +23,41 @@ logger.addHandler(c_handler)
 logger.addHandler(f_handler)
 
 
-def get_params() -> dict:
+# def get_params() -> dict:
+#     """Получение параметров скрипта"""
+#     params = {}
+#     if len(sys.argv) == 1:
+#         logger.error('Error. Specify a repository')
+#         sys.exit(1)
+#     repository = sys.argv[1]
+#     params['repository'] = repository.replace('https://github.com/', 'https://api.github.com/repos/')
+#     if params['repository'] == repository:
+#         logger.error('Error in repository path')
+#         sys.exit(1)
+#     params['branch'] = 'master'
+#     return params
+
+def get_params() -> argparse.Namespace:
     """Получение параметров скрипта"""
-    params = {}
-    if len(sys.argv) == 1:
-        logger.error('Error. Specify a repository')
-        sys.exit(1)
-    repository = sys.argv[1]
-    params['repository'] = repository.replace('https://github.com/', 'https://api.github.com/repos/')
-    if params['repository'] == repository:
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('repository', help='Full path to repository (https://github.com/...)')
+    parser.add_argument('-s', '--since', help='Only data after this date will be analyze. '
+                                              'This is a timestamp in ISO 8601 format: YYYY-MM-DDTHH:MM:SSZ.')
+    parser.add_argument('-u', '--until', help='Only data before this date will be analyze. '
+                                              'This is a timestamp in ISO 8601 format: YYYY-MM-DDTHH:MM:SSZ.')
+    parser.add_argument('-b', '--branch', help='Repository branch. Default: master')
+
+    args = parser.parse_args()
+    if not args.branch:
+        args.branch = 'master'
+    repository = args.repository.replace('https://github.com/', 'https://api.github.com/repos/')
+    if args.repository == repository:
         logger.error('Error in repository path')
         sys.exit(1)
-    params['branch'] = 'master'
-    return params
+    else:
+        args.repository = repository
+    return args
 
 
 def check_message_from_github(answer):
@@ -45,26 +67,26 @@ def check_message_from_github(answer):
         sys.exit(1)
 
 
-def request_response(url: str):
+def request_response(url: str, params=None):
     """Получить response с репозитория"""
     try:
-        r = requests.get(url)
+        r = requests.get(url, params)
     except MaxRetryError as e:
         logger.error(e.reason)
         sys.exit(1)
     return r
 
 
-def get_response(url: str):
+def get_response(url: str, params=None):
     """Получить response с учетом задержки по лимитам"""
-    r = request_response(url)
+    r = request_response(url, params)
     while r.headers._store['x-ratelimit-remaining'][1] == '0':
         reset_timestamp = int(r.headers._store['x-ratelimit-reset'][1])
         sleep_time = reset_timestamp - calendar.timegm(
             time.gmtime()) + 5  # add 5 seconds to be sure the rate limit has been reset
         logger.warning(f"Activate sleep mode to {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(reset_timestamp))}")
         time.sleep(sleep_time)
-        r = request_response(url)
+        r = request_response(url, params)
     return r
 
 
@@ -80,9 +102,9 @@ def get_author_logins(commits: list) -> list:
     return logins
 
 
-def get_commit_authors(url: str) -> list:
+def get_commit_authors(url: str, params=None) -> list:
     """Получение авторов коммитов"""
-    r = get_response(url)
+    r = get_response(url, params)
     answer = json.loads(r.text)
     check_message_from_github(answer)
     commit_authors = get_author_logins(answer)
@@ -119,10 +141,16 @@ def get_pull_requests(url: str) -> int:
     return pull_requests
 
 
-def analyze(params: dict):
+def analyze(args: argparse.Namespace):
     """Анализ репозитория"""
     # print TOP of authors
-    commit_authors = get_commit_authors(params['repository'] + '/commits')
+    params = {
+        'since': args.since,
+        'until': args.until,
+        'sha': args.branch,
+    }
+
+    commit_authors = get_commit_authors(args.repository + '/commits', params=params)
     for author in analysis_commit_authors(commit_authors):
         print(author[0], ':', author[1])
 
@@ -134,5 +162,5 @@ def analyze(params: dict):
 
 
 if __name__ == '__main__':
-    params = get_params()
-    analyze(params)
+    args = get_params()
+    analyze(args)
