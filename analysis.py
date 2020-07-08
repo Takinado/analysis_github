@@ -1,7 +1,6 @@
 """Скрипт анализа репозитория GitHub"""
 import argparse
 import calendar
-import json
 import logging
 import requests
 import time
@@ -22,20 +21,6 @@ f_handler.setFormatter(f_format)
 logger.addHandler(c_handler)
 logger.addHandler(f_handler)
 
-
-# def get_params() -> dict:
-#     """Получение параметров скрипта"""
-#     params = {}
-#     if len(sys.argv) == 1:
-#         logger.error('Error. Specify a repository')
-#         sys.exit(1)
-#     repository = sys.argv[1]
-#     params['repository'] = repository.replace('https://github.com/', 'https://api.github.com/repos/')
-#     if params['repository'] == repository:
-#         logger.error('Error in repository path')
-#         sys.exit(1)
-#     params['branch'] = 'master'
-#     return params
 
 def get_params() -> argparse.Namespace:
     """Получение параметров скрипта"""
@@ -67,17 +52,17 @@ def check_message_from_github(answer):
         sys.exit(1)
 
 
-def request_response(url: str, params=None):
+def request_response(url: str, params: dict = None):
     """Получить response с репозитория"""
     try:
         r = requests.get(url, params)
-    except MaxRetryError as e:
+    except (MaxRetryError, ConnectionError) as e:
         logger.error(e.reason)
         sys.exit(1)
     return r
 
 
-def get_response(url: str, params=None):
+def get_response(url: str, params: dict = None):
     """Получить response с учетом задержки по лимитам"""
     r = request_response(url, params)
     while r.headers._store['x-ratelimit-remaining'][1] == '0':
@@ -90,77 +75,20 @@ def get_response(url: str, params=None):
     return r
 
 
-def get_author_logins(commits: list) -> list:
-    """Получить логины авторов
-    >>> get_author_logins([{'author': {'login': 'a'}}, {'author': {'login': 'a'}}, {'author': None}])
-    ['a', 'a']
-    """
-    logins = []
-    for commit in commits:
-        if commit['author']:
-            logins.append(commit['author'].get('login'))
-    return logins
-
-
-def get_commit_authors(url: str, params=None) -> list:
-    """Получение авторов коммитов"""
-    r = get_response(url, params)
-    answer = json.loads(r.text)
-    check_message_from_github(answer)
-    commit_authors = get_author_logins(answer)
-    if r.links.get('next'):
-        commit_authors += get_commit_authors(r.links['next']['url'])
-    return commit_authors
-
-
-def analysis_commit_authors(commit_authors: list) -> list:
-    """Анализ авторов коммитов
-    >>> analysis_commit_authors(['a', 'b', 'b'])
-    [('b', 2), ('a', 1)]
-    """
-    counted_commit_authors = {}
-    for author in commit_authors:
-        if author in counted_commit_authors:
-            counted_commit_authors[author] += 1
-        else:
-            counted_commit_authors[author] = 1
-    counted_commit_authors = list(counted_commit_authors.items())
-    counted_commit_authors.sort(key=lambda i: i[1])
-    counted_commit_authors.reverse()
-    return counted_commit_authors[:30]
-
-
-def get_pull_requests(url: str) -> int:
-    """Получение pull requests"""
-    r = get_response(url)
-    answer = json.loads(r.text)
-    check_message_from_github(answer)
-    pull_requests = len(answer)
-    if r.links.get('next'):
-        pull_requests += get_pull_requests(r.links['next']['url'])
-    return pull_requests
-
-
-def analyze(args: argparse.Namespace):
+def analyze():
     """Анализ репозитория"""
-    # print TOP of authors
+    args = get_params()
     params = {
         'since': args.since,
         'until': args.until,
-        'sha': args.branch,
+        'branch': args.branch,
     }
+    from models import Repository
+    repository = Repository(args.repository, **params)
 
-    commit_authors = get_commit_authors(args.repository + '/commits', params=params)
-    for author in analysis_commit_authors(commit_authors):
-        print(author[0], ':', author[1])
-
-    # Count pull requests
-    open_pull_url = f"{params['repository']}/pulls?state=open"
-    print(f"Open pull requests: {get_pull_requests(open_pull_url)}")
-    closed_pull_url = f"{params['repository']}/pulls?state=closed"
-    print(f"Closed pull requests: {get_pull_requests(closed_pull_url)}")
+    repository.print_top_authors()
+    repository.print_counted_pulls()
 
 
 if __name__ == '__main__':
-    args = get_params()
-    analyze(args)
+    analyze()
