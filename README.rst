@@ -1,5 +1,6 @@
 .. raw:: html
-
+    <h1>GitHub repository analysis</h1>
+    <p>The script analyzes the repository using the GitHub REST API. Analysis results output to stdout.</p>
     <p align="center">
       <a href="https://travis-ci.org/Takinado/analysis_github">
         <img src="https://travis-ci.org/Takinado/analysis_github.svg?branch=master" alt="Build Status">
