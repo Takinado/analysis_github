@@ -1,4 +1,5 @@
 .. raw:: html
+
     <h1>GitHub repository analysis</h1>
     <p>The script analyzes the repository using the GitHub REST API. Analysis results output to stdout.</p>
     <p align="center">
