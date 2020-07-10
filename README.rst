@@ -33,8 +33,11 @@ optional arguments:
 CI/CD
 ======================
 GitHub, Travis-CI, Heroku
+
 On Heroku deploy Django (for example).
+
 Run script by django-cron, django-chroniker, or Celery.
+
 Write results to the database.
 
 If we need we can create a simple form to run the script with different parameters.
