@@ -1,8 +1,8 @@
+"""Модели для анализа репозитория GitHub"""
 import datetime
 import json
 
-
-from analysis import get_response, check_message_from_github
+from utils import get_response, check_message_from_github
 
 DATETIME_FORMAT = '%Y-%m-%dT%H:%M:%SZ'
 
@@ -10,7 +10,9 @@ DATETIME_FORMAT = '%Y-%m-%dT%H:%M:%SZ'
 class Repository:
     """Репозиторий"""
 
-    def __init__(self, path: str, since: str = '', until: str = '', branch: str = 'master', token: str = ''):
+    def __init__(
+        self, path: str, since: str = '', until: str = '', branch: str = 'master', token: str = ''
+    ):
         self.path = path
         self.since = since
         self.until = until
@@ -125,6 +127,7 @@ class Commit:
 
 class Event:
     """ Абстрактный класс для pull_request и issue"""
+
     def __init__(self, raw_data: dict):
         self.number = raw_data.get('number')
         self.state = raw_data.get('state')
@@ -144,8 +147,11 @@ class Event:
 
 class Pull(Event):
     """Pull request"""
+
     def is_old(self):
-        if self.state == 'open' and (self.created_at < datetime.datetime.now() + datetime.timedelta(days=-30)):
+        if self.state == 'open' and (
+            self.created_at < datetime.datetime.now() + datetime.timedelta(days=-30)
+        ):
             return True
 
     def in_date_range(self, since, until):
@@ -162,11 +168,17 @@ class Issue(Event):
     def __init__(self, raw_data):
         super().__init__(raw_data)
         raw_closed_at = raw_data.get('closed_at')
-        self.closed_at = datetime.datetime.strptime(raw_closed_at, DATETIME_FORMAT) if raw_closed_at else None
+        self.closed_at = (
+            datetime.datetime.strptime(raw_closed_at, DATETIME_FORMAT) if raw_closed_at else None
+        )
 
     def is_old(self):
-        if self.state == 'open' and (self.created_at < datetime.datetime.now() + datetime.timedelta(days=-14)):
+        if self.state == 'open' and (
+            self.created_at < datetime.datetime.now() + datetime.timedelta(days=-14)
+        ):
             return True
-        if self.state == 'closed' and (self.created_at < self.closed_at + datetime.timedelta(days=-14)):
+        if self.state == 'closed' and (
+            self.created_at < self.closed_at + datetime.timedelta(days=-14)
+        ):
             return True
         return False
